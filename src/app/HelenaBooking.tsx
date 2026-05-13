@@ -42,8 +42,8 @@ export default function HelenaBooking() {
         ]);
         const servData = await servRes.json();
         const availData = await availRes.json();
-        setServices(servData);
-        setAvailability(availData);
+        setServices(Array.isArray(servData) ? servData : []);
+        setAvailability(Array.isArray(availData) ? availData : []);
       } catch {
         setError("Errore nel caricamento dei dati. Riprova.");
       } finally {
