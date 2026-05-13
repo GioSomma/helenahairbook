@@ -1,60 +1,103 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-const SERVICES = [
-  {
-    id: 1,
-    name: "Balayage Completo",
-    description: "Tecnica di illuminazione naturale e personalizzata",
-    price: "da 140€",
-    duration: "3–4 h",
-    icon: "✦",
-  },
-  {
-    id: 2,
-    name: "Piega & Matiz",
-    description: "Piega professionale con bagno di colore o matiz",
-    price: "da 35€",
-    duration: "1–2 h",
-    icon: "✧",
-  },
-  {
-    id: 3,
-    name: "Colpi di Sole, Taglio & Piega",
-    description: "Colpi di sole, taglio e asciugatura con finitura perfetta",
-    price: "da 65€",
-    duration: "2–3 h",
-    icon: "✦",
-  },
-];
+type Service = {
+  id: number;
+  name: string;
+  description: string;
+  price: string;
+  duration: string;
+};
 
-const DAYS = [
-  { date: "Lun 28 Apr", slots: ["10:00", "11:30", "15:00", "16:30"] },
-  { date: "Mar 29 Apr", slots: ["09:00", "10:30", "12:00", "17:00"] },
-  { date: "Mer 30 Apr", slots: ["10:00", "13:00", "15:30"] },
-  { date: "Gio 1 Mag", slots: ["09:30", "11:00", "14:00", "16:00"] },
-  { date: "Ven 2 Mag", slots: ["10:00", "11:30", "16:30", "18:00"] },
-];
+type Slot = {
+  id: number;
+  time_slot: string;
+};
 
-type Service = typeof SERVICES[0];
-type Day = typeof DAYS[0];
+type DayAvailability = {
+  date: string;
+  slots: Slot[];
+};
 
 export default function HelenaBooking() {
   const [step, setStep] = useState(1);
+  const [services, setServices] = useState<Service[]>([]);
+  const [availability, setAvailability] = useState<DayAvailability[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
-  const [selectedDay, setSelectedDay] = useState<Day | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<DayAvailability | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
   const [form, setForm] = useState({ name: "", surname: "", email: "", phone: "", notes: "" });
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [servRes, availRes] = await Promise.all([
+          fetch('/api/services'),
+          fetch('/api/availability'),
+        ]);
+        const servData = await servRes.json();
+        const availData = await availRes.json();
+        setServices(servData);
+        setAvailability(availData);
+      } catch {
+        setError("Errore nel caricamento dei dati. Riprova.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    const days = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+    const months = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+    return {
+      day: days[d.getDay()],
+      num: d.getDate(),
+      month: months[d.getMonth()],
+    };
+  };
 
   const canGoStep2 = selectedService !== null;
   const canGoStep3 = selectedDay !== null && selectedSlot !== null;
   const canSubmit = form.name && form.surname && form.email && form.phone;
 
-  const handleSubmit = () => {
-    if (canSubmit) setSubmitted(true);
+  const handleSubmit = async () => {
+    if (!canSubmit || !selectedService || !selectedSlot) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          service_id: selectedService.id,
+          availability_id: selectedSlot.id,
+          ...form,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Errore nella prenotazione');
+      setSubmitted(true);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Errore sconosciuto');
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (loading) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(160deg, #f7f5f0 0%, #ede9e0 50%, #f0ede6 100%)", fontFamily: "'Jost', sans-serif", color: "#b7a05a", fontSize: 14, letterSpacing: 2 }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500&display=swap');`}</style>
+      ✦ Caricamento...
+    </div>
+  );
 
   return (
     <div style={{
@@ -93,7 +136,6 @@ export default function HelenaBooking() {
         .profile-card { background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 8px 40px rgba(0,0,0,0.07); margin-bottom: 28px; display: flex; gap: 0; position: relative; }
         .profile-img-wrap { width: 130px; min-height: 160px; flex-shrink: 0; background: linear-gradient(180deg, #8faf8a 0%, #6b9066 100%); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
         .profile-avatar { width: 90px; height: 90px; border-radius: 50%; background: rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: center; font-size: 40px; position: relative; z-index: 1; }
-        .profile-img-wrap::before { content: ''; position: absolute; bottom: -20px; right: -20px; width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,0.08); }
         .profile-text { padding: 20px 18px; flex: 1; display: flex; flex-direction: column; justify-content: center; }
         .profile-name { font-size: 18px; font-weight: 400; color: #2c2c2c; margin-bottom: 4px; }
         .profile-role { font-family: 'Jost', sans-serif; font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: #b7a05a; margin-bottom: 12px; }
@@ -143,6 +185,8 @@ export default function HelenaBooking() {
         .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
         .btn-back { width: 100%; padding: 14px; border-radius: 16px; background: transparent; border: 1.5px solid #e0d8c8; color: #999; font-family: 'Jost', sans-serif; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; transition: all 0.2s; }
         .btn-back:hover { border-color: #bbb; color: #666; }
+        .error-box { background: #fff5f5; border: 1px solid #fca5a5; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; font-family: 'Jost', sans-serif; font-size: 12px; color: #dc2626; text-align: center; }
+        .empty-state { text-align: center; padding: 40px 0; font-family: 'Jost', sans-serif; font-size: 13px; color: #ccc; font-style: italic; }
         .success-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; text-align: center; min-height: 60vh; }
         .success-icon { width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #7a9e75, #98bf93); display: flex; align-items: center; justify-content: center; font-size: 32px; margin-bottom: 24px; box-shadow: 0 12px 36px rgba(122,158,117,0.35); animation: successPop 0.5s cubic-bezier(0.175,0.885,0.32,1.275); }
         @keyframes successPop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
@@ -186,6 +230,8 @@ export default function HelenaBooking() {
       )}
 
       <div className="content">
+
+        {/* STEP 1 — Servizi */}
         {step === 1 && (
           <>
             <div className="profile-card">
@@ -195,7 +241,7 @@ export default function HelenaBooking() {
               <div className="profile-text">
                 <div className="profile-name">Helena</div>
                 <div className="profile-role">Hair · Colore · Mentor</div>
-                <div className="profile-bio">"Con oltre 10 anni di esperienza, ogni capello è un'opera d&apos;arte unica. La mia passione è farti uscire sentendoti straordinaria."</div>
+                <div className="profile-bio">&quot;Con oltre 10 anni di esperienza, ogni capello è un&apos;opera d&apos;arte unica. La mia passione è farti uscire sentendoti straordinaria.&quot;</div>
                 <div className="profile-stars">★★★★★</div>
               </div>
             </div>
@@ -204,59 +250,71 @@ export default function HelenaBooking() {
             <div className="ornament-divider">· · ·</div>
             <div className="section-sub">Seleziona il trattamento che desideri</div>
 
-            {SERVICES.map((s) => (
-              <div key={s.id} className={`service-card ${selectedService?.id === s.id ? "selected" : ""}`} onClick={() => setSelectedService(s)}>
-                <div className="service-icon">{s.icon}</div>
-                <div className="service-info">
-                  <div className="service-name">{s.name}</div>
-                  <div className="service-desc">{s.description}</div>
-                  <div className="service-meta">
-                    <span className="service-price">{s.price}</span>
-                    <span className="service-dur">⏱ {s.duration}</span>
+            {services.length === 0 ? (
+              <div className="empty-state">Nessun servizio disponibile al momento.</div>
+            ) : (
+              services.map((s, i) => {
+                const icons = ["✦", "✧", "✦"];
+                return (
+                  <div key={s.id} className={`service-card ${selectedService?.id === s.id ? "selected" : ""}`} onClick={() => setSelectedService(s)}>
+                    <div className="service-icon">{icons[i % icons.length]}</div>
+                    <div className="service-info">
+                      <div className="service-name">{s.name}</div>
+                      <div className="service-desc">{s.description}</div>
+                      <div className="service-meta">
+                        <span className="service-price">{s.price}</span>
+                        <span className="service-dur">⏱ {s.duration}</span>
+                      </div>
+                    </div>
+                    <div className={`service-check ${selectedService?.id === s.id ? "checked" : ""}`}>{selectedService?.id === s.id ? "✓" : ""}</div>
                   </div>
-                </div>
-                <div className={`service-check ${selectedService?.id === s.id ? "checked" : ""}`}>{selectedService?.id === s.id ? "✓" : ""}</div>
-              </div>
-            ))}
+                );
+              })
+            )}
 
             <div style={{ marginTop: 8 }} />
             <button className="btn-primary" disabled={!canGoStep2} onClick={() => setStep(2)}>Continua →</button>
           </>
         )}
 
+        {/* STEP 2 — Data e orario */}
         {step === 2 && (
           <>
             <div className="section-title">Scegli <em>data</em> e orario</div>
             <div className="ornament-divider">· · ·</div>
             <div className="section-sub">Seleziona il giorno che preferisci</div>
 
-            <div className="days-scroll">
-              {DAYS.map((d) => {
-                const parts = d.date.split(" ");
-                return (
-                  <div key={d.date} className={`day-chip ${selectedDay?.date === d.date ? "selected" : ""}`} onClick={() => { setSelectedDay(d); setSelectedSlot(null); }}>
-                    <div className="day-name">{parts[0]}</div>
-                    <div className="day-date">{parts[1]}<br /><span style={{ fontSize: 11, opacity: 0.7 }}>{parts[2]}</span></div>
-                  </div>
-                );
-              })}
-            </div>
+            {availability.length === 0 ? (
+              <div className="empty-state">Nessuna disponibilità al momento.<br />Torna presto per le prossime date!</div>
+            ) : (
+              <div className="days-scroll">
+                {availability.map((d) => {
+                  const { day, num, month } = formatDate(d.date);
+                  return (
+                    <div key={d.date} className={`day-chip ${selectedDay?.date === d.date ? "selected" : ""}`} onClick={() => { setSelectedDay(d); setSelectedSlot(null); }}>
+                      <div className="day-name">{day}</div>
+                      <div className="day-date">{num}<br /><span style={{ fontSize: 11, opacity: 0.7 }}>{month}</span></div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {selectedDay && (
               <>
                 <div className="slots-label">Orari disponibili</div>
                 <div className="slots-grid">
                   {selectedDay.slots.map((slot) => (
-                    <div key={slot} className={`slot-btn ${selectedSlot === slot ? "selected" : ""}`} onClick={() => setSelectedSlot(slot)}>{slot}</div>
+                    <div key={slot.id} className={`slot-btn ${selectedSlot?.id === slot.id ? "selected" : ""}`} onClick={() => setSelectedSlot(slot)}>
+                      {slot.time_slot}
+                    </div>
                   ))}
                 </div>
               </>
             )}
 
-            {!selectedDay && (
-              <div style={{ textAlign: "center", padding: "32px 0", fontFamily: "'Jost', sans-serif", fontSize: 13, color: "#ccc", fontStyle: "italic" }}>
-                Seleziona un giorno per vedere gli orari
-              </div>
+            {!selectedDay && availability.length > 0 && (
+              <div className="empty-state">Seleziona un giorno per vedere gli orari</div>
             )}
 
             <button className="btn-primary" disabled={!canGoStep3} onClick={() => setStep(3)}>Continua →</button>
@@ -264,6 +322,7 @@ export default function HelenaBooking() {
           </>
         )}
 
+        {/* STEP 3 — Conferma */}
         {step === 3 && !submitted && (
           <>
             <div className="section-title">Conferma la tua <em>prenotazione</em></div>
@@ -274,9 +333,13 @@ export default function HelenaBooking() {
               <div className="recap-icon">✦</div>
               <div className="recap-info">
                 <div className="recap-service">{selectedService?.name}</div>
-                <div className="recap-when">{selectedDay?.date} · {selectedSlot} · {selectedService?.price}</div>
+                <div className="recap-when">
+                  {selectedDay && (() => { const { day, num, month } = formatDate(selectedDay.date); return `${day} ${num} ${month}`; })()} · {selectedSlot?.time_slot} · {selectedService?.price}
+                </div>
               </div>
             </div>
+
+            {error && <div className="error-box">⚠️ {error}</div>}
 
             <div className="form-row">
               <div>
@@ -288,31 +351,30 @@ export default function HelenaBooking() {
                 <input className="form-input" placeholder="Rossi" value={form.surname} onChange={e => setForm({ ...form, surname: e.target.value })} />
               </div>
             </div>
-
             <div className="form-group">
               <label className="form-label">Email</label>
               <input className="form-input" type="email" placeholder="maria@email.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
             </div>
-
             <div className="form-group">
               <label className="form-label">Telefono</label>
               <input className="form-input" type="tel" placeholder="+39 333 000 0000" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
             </div>
-
             <div className="form-group">
               <label className="form-label">Note e desideri ✦ opzionale</label>
-              <textarea className="form-input" placeholder="Raccontami cosa vorresti ottenere, se hai riferimenti, allergie o altre preferenze speciali..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+              <textarea className="form-input" placeholder="Raccontami cosa vorresti ottenere..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
             </div>
-
             <div className="privacy-note">
               Confermando accetti che i tuoi dati vengano utilizzati esclusivamente<br />per gestire la tua prenotazione e inviarti promemoria.
             </div>
 
-            <button className="btn-primary" disabled={!canSubmit} onClick={handleSubmit}>✦ Conferma Prenotazione</button>
+            <button className="btn-primary" disabled={!canSubmit || submitting} onClick={handleSubmit}>
+              {submitting ? "Invio in corso..." : "✦ Conferma Prenotazione"}
+            </button>
             <button className="btn-back" onClick={() => setStep(2)}>← Indietro</button>
           </>
         )}
 
+        {/* SUCCESS */}
         {submitted && (
           <div className="success-screen">
             <div className="success-icon">✓</div>
@@ -320,8 +382,8 @@ export default function HelenaBooking() {
             <div className="success-msg">Riceverai una email di conferma a breve. Ti ricorderemo l&apos;appuntamento 3 giorni prima.</div>
             <div className="success-card">
               <div className="success-row"><span className="success-key">Servizio</span><span className="success-val">{selectedService?.name}</span></div>
-              <div className="success-row"><span className="success-key">Data</span><span className="success-val">{selectedDay?.date}</span></div>
-              <div className="success-row"><span className="success-key">Orario</span><span className="success-val">{selectedSlot}</span></div>
+              <div className="success-row"><span className="success-key">Data</span><span className="success-val">{selectedDay && (() => { const { day, num, month } = formatDate(selectedDay.date); return `${day} ${num} ${month}`; })()}</span></div>
+              <div className="success-row"><span className="success-key">Orario</span><span className="success-val">{selectedSlot?.time_slot}</span></div>
               <div className="success-row"><span className="success-key">Nome</span><span className="success-val">{form.name} {form.surname}</span></div>
               <div className="success-row"><span className="success-key">Prezzo</span><span className="success-val" style={{ color: "#b7a05a" }}>{selectedService?.price}</span></div>
             </div>
