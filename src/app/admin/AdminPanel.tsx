@@ -206,7 +206,7 @@ export default function AdminPanel() {
   // Upcoming bookings
   const today = new Date().toISOString().split("T")[0];
   const upcomingBookings = confirmedBookings
-    .filter(b => b.availability?.date >= today)
+    .filter(b => (b.availability?.date ?? "") >= today)
     .sort((a, b) => (a.availability?.date || "") < (b.availability?.date || "") ? -1 : 1);
 
   // Client stats
