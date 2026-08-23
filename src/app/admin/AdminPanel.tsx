@@ -635,8 +635,8 @@ export default function AdminPanel() {
                         { k: "Annullamenti", v: cancelled },
                         { k: "Sentiment", v: avgSentiment !== null ? sentimentEmoji(Math.round(avgSentiment)) : "—" },
                         { k: "Servizi", v: services.join(", ") || "—" },
-                        { k: "Prima visita", v: dates[0] ? formatDate(dates[0]) : "—" },
-                        { k: "Ultima visita", v: dates[dates.length - 1] ? formatDate(dates[dates.length - 1]) : "—" },
+                        { k: "Prima visita", v: dates[0] ? formatDate(dates[0] as string) : "—" },
+                        { k: "Ultima visita", v: dates[dates.length - 1] ? formatDate(dates[dates.length - 1] as string) : "—" },
                       ].map(({ k, v }) => (
                         <div key={k} style={{ padding: "4px 10px", background: "rgba(0,0,0,0.2)", borderRadius: 6 }}>
                           <span style={{ fontSize: 9, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1 }}>{k}: </span>
